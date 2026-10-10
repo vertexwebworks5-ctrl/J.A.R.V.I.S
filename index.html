@@ -1,0 +1,333 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#030912">
+<title>JARVIS | Stark Interface</title>
+<style>
+*{box-sizing:border-box}
+body{
+ margin:0;background:radial-gradient(ellipse at center,#102536,#030710 72%);
+ color:#5cecff;font-family:Arial,sans-serif;
+ min-height:100vh;text-align:center;overflow-x:hidden
+}
+body:before{
+ content:"";position:fixed;inset:0;pointer-events:none;
+ background:repeating-linear-gradient(0deg,transparent 0 3px,#00d9ff08 4px 5px)
+}
+header{padding:24px 12px 10px;border-bottom:1px solid #1b7287}
+.logo{font-size:27px;letter-spacing:7px;font-weight:bold;text-shadow:0 0 15px #00dfff}
+.sub{font-size:10px;letter-spacing:4px;color:#72aebd;margin-top:8px}
+.status{font-size:11px;letter-spacing:2px;margin:22px auto;color:#5cffc5}
+.reactor{
+ width:190px;height:190px;margin:25px auto;
+ border:2px solid #36dfff;border-radius:50%;display:grid;place-items:center;
+ position:relative;box-shadow:0 0 18px #00cfff,inset 0 0 22px #00bfff55
+}
+.reactor:before,.reactor:after{
+ content:"";position:absolute;border:1px dashed #5cecff;
+ border-radius:50%;inset:12px;animation:spin 12s linear infinite
+}
+.reactor:after{inset:27px;border-style:solid;animation-direction:reverse}
+.core{
+ width:68px;height:68px;border-radius:50%;
+ background:radial-gradient(circle,#fff 0,#9df7ff 20%,#00bfff 50%,#064d88 75%);
+ box-shadow:0 0 35px #00dfff;animation:pulse 2s infinite
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{50%{box-shadow:0 0 55px #00dfff}}
+.panel{margin:20px auto;max-width:480px;padding:0 18px}
+button{
+ background:#071c2b;color:#72f3ff;border:1px solid #23cce9;
+ padding:13px 15px;margin:5px;border-radius:4px;
+ font-weight:bold;letter-spacing:1px;cursor:pointer;
+ box-shadow:0 0 10px #00cfff22
+}
+button:active{background:#12445a}
+button:disabled{opacity:.5;cursor:wait}
+#talk{width:85%;max-width:320px;background:#073448;font-size:15px}
+#reply{color:#e5fbff;min-height:48px;padding:15px 8px;line-height:1.6;overflow-wrap:anywhere}
+.line{border-top:1px solid #1b5365;margin:14px 0}
+.small{font-size:10px;letter-spacing:2px;color:#6498a9}
+.grid{display:flex;justify-content:center;flex-wrap:wrap;gap:5px}
+.chatbox{display:flex;gap:7px;margin-top:12px}
+#message{
+ flex:1;min-width:0;background:#071c2b;color:#e5fbff;
+ border:1px solid #23cce9;border-radius:4px;padding:13px;font-size:14px;
+ outline:none
+}
+#message:focus{box-shadow:0 0 12px #00cfff33}
+#send{margin:0}
+#history{
+ max-height:230px;overflow:auto;text-align:left;margin:10px 0;
+ border:1px solid #164354;border-radius:5px;padding:8px;
+ background:#030b13aa
+}
+.entry{padding:9px;margin:5px 0;border-radius:4px;line-height:1.5;
+ white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px}
+.me{background:#103448;color:#a9f7ff}
+.jarvis{background:#0b1a25;color:#e5fbff}
+.label{font-size:9px;color:#62cde0;letter-spacing:1px;margin-bottom:4px}
+.note{font-size:10px;color:#6498a9;line-height:1.6;margin:12px 4px}
+</style>
+</head>
+<body>
+<header>
+ <div class="logo">J.A.R.V.I.S.</div>
+ <div class="sub">JUST A RATHER VERY INTELLIGENT SYSTEM</div>
+</header>
+
+<div class="status" id="status">● SYSTEM STANDBY</div>
+<div class="reactor"><div class="core"></div></div>
+<div class="small">STARK INDUSTRIES // PERSONAL AI</div>
+
+<div class="panel">
+ <button id="talk">🎙 ACTIVATE VOICE</button>
+
+ <div id="reply" aria-live="polite">Welcome back, Sir. Systems ready.</div>
+
+ <div class="line"></div>
+ <div class="small">TEXT + VOICE CONVERSATION</div>
+
+ <div id="history" aria-live="polite">
+  <div class="entry jarvis">Welcome back, Sir. You can speak or type to me.</div>
+ </div>
+
+ <div class="chatbox">
+  <input id="message" type="text" placeholder="Message JARVIS..." autocomplete="off">
+  <button id="send">SEND</button>
+ </div>
+
+ <div class="line"></div>
+ <div class="small">QUICK COMMANDS</div>
+ <div class="grid">
+  <button onclick="command('time')">TIME</button>
+  <button onclick="command('maps')">MAPS</button>
+  <button onclick="command('youtube')">YOUTUBE</button>
+  <button onclick="command('hello')">JARVIS STATUS</button>
+ </div>
+
+ <div class="line"></div>
+ <button id="stop" onclick="stopVoice()">■ SILENCE</button>
+ <button onclick="clearChat()">CLEAR CHAT</button>
+
+ <div class="note">
+  AI requires internet access and a deployed backend.
+  Microphone access is required for voice input.
+  Never put your secret API key in this HTML file.
+ </div>
+</div>
+
+<script>
+const reply=document.getElementById("reply");
+const statusEl=document.getElementById("status");
+const talk=document.getElementById("talk");
+const input=document.getElementById("message");
+const sendBtn=document.getElementById("send");
+const historyBox=document.getElementById("history");
+
+let recognition=null;
+let busy=false;
+let messages=[];
+let voiceEnabled=true;
+
+function addEntry(text,who){
+ const wrap=document.createElement("div");
+ wrap.className="entry "+who;
+
+ const label=document.createElement("div");
+ label.className="label";
+ label.textContent=who==="me"?"YOU":"J.A.R.V.I.S";
+
+ const content=document.createElement("div");
+ content.textContent=text;
+
+ wrap.append(label,content);
+ historyBox.appendChild(wrap);
+ historyBox.scrollTop=historyBox.scrollHeight;
+}
+
+function say(text){
+ reply.textContent=text;
+
+ if(!("speechSynthesis" in window)){
+  statusEl.textContent="● TEXT MODE";
+  return;
+ }
+
+ try{
+  window.speechSynthesis.cancel();
+  if(!voiceEnabled)return;
+
+  const utterance=new SpeechSynthesisUtterance(text);
+  utterance.lang="en-US";
+  utterance.rate=0.95;
+  utterance.onstart=()=>statusEl.textContent="● JARVIS SPEAKING";
+  utterance.onend=()=>statusEl.textContent="● SYSTEM ONLINE";
+  utterance.onerror=()=>statusEl.textContent="● TEXT MODE";
+  window.speechSynthesis.speak(utterance);
+ }catch(e){
+  statusEl.textContent="● TEXT MODE";
+ }
+}
+
+function quickCommand(text){
+ const q=text.toLowerCase().trim();
+
+ if(/\b(time|current time)\b/.test(q)){
+  say("The time is "+new Date().toLocaleTimeString());
+  return true;
+ }
+ if(/\b(open )?(google )?maps\b/.test(q)){
+  say("Opening Google Maps, Sir.");
+  window.open("https://maps.google.com","_blank");
+  return true;
+ }
+ if(/\b(open )?youtube\b/.test(q)){
+  say("Opening YouTube, Sir.");
+  window.open("https://youtube.com","_blank");
+  return true;
+ }
+ if(q==="hello"||q==="jarvis status"||q==="status"){
+  say("JARVIS interface is online. AI connection depends on the backend.");
+  return true;
+ }
+ return false;
+}
+
+async function sendMessage(textOverride){
+ const text=(textOverride??input.value).trim();
+ if(!text||busy)return;
+
+ input.value="";
+ addEntry(text,"me");
+ messages.push({role:"user",content:text});
+
+ if(quickCommand(text))return;
+
+ busy=true;
+ sendBtn.disabled=true;
+ talk.disabled=true;
+ statusEl.textContent="● THINKING...";
+
+ try{
+  const response=await fetch("/api/chat",{
+   method:"POST",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({messages:messages.slice(-20)})
+  });
+
+  const data=await response.json();
+
+  if(!response.ok){
+   throw new Error(data.error||"AI request failed ("+response.status+")");
+  }
+
+  const answer=data.choices?.[0]?.message?.content;
+  if(typeof answer!=="string"||!answer.trim()){
+   throw new Error("AI returned an empty response.");
+  }
+
+  messages.push({role:"assistant",content:answer});
+  addEntry(answer,"jarvis");
+  say(answer);
+ }catch(error){
+  const errorText="Connection error: "+error.message+
+   ". Check backend deployment and GROQ_API_KEY.";
+  addEntry(errorText,"jarvis");
+  say(errorText);
+  statusEl.textContent="● CONNECTION ERROR";
+ }finally{
+  busy=false;
+  sendBtn.disabled=false;
+  talk.disabled=false;
+  if(statusEl.textContent!=="● CONNECTION ERROR"&&
+     statusEl.textContent!=="● JARVIS SPEAKING"){
+   statusEl.textContent="● SYSTEM ONLINE";
+  }
+ }
+}
+
+function command(q){
+ sendMessage(q);
+}
+
+function listen(){
+ const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+
+ if(!SR){
+  say("Voice recognition is not supported here. Please try Google Chrome.");
+  return;
+ }
+
+ try{
+  if(recognition){
+   try{recognition.stop()}catch(e){}
+  }
+
+  recognition=new SR();
+  recognition.lang="en-US";
+  recognition.interimResults=false;
+  recognition.maxAlternatives=1;
+
+  recognition.onstart=()=>{
+   statusEl.textContent="● LISTENING";
+   reply.textContent="Listening, Sir...";
+   talk.textContent="🎙 LISTENING...";
+  };
+
+  recognition.onresult=e=>{
+   const heard=e.results[0][0].transcript;
+   sendMessage(heard);
+  };
+
+  recognition.onerror=e=>{
+   reply.textContent="Voice error: "+e.error+". Check microphone permission.";
+   statusEl.textContent="● VOICE UNAVAILABLE";
+  };
+
+  recognition.onend=()=>{
+   talk.textContent="🎙 ACTIVATE VOICE";
+   if(statusEl.textContent==="● LISTENING"){
+    statusEl.textContent="● SYSTEM ONLINE";
+   }
+  };
+
+  recognition.start();
+ }catch(e){
+  say("Could not start microphone. Please try again.");
+ }
+}
+
+function stopVoice(){
+ if(recognition){
+  try{recognition.stop()}catch(e){}
+ }
+ if("speechSynthesis" in window){
+  window.speechSynthesis.cancel();
+ }
+ statusEl.textContent="● SYSTEM STANDBY";
+ talk.textContent="🎙 ACTIVATE VOICE";
+ reply.textContent="Standing by, Sir.";
+}
+
+function clearChat(){
+ messages=[];
+ historyBox.replaceChildren();
+ addEntry("Chat cleared. How can I help you, Sir?","jarvis");
+ reply.textContent="Systems ready.";
+ if("speechSynthesis" in window)window.speechSynthesis.cancel();
+ statusEl.textContent="● SYSTEM ONLINE";
+}
+
+talk.addEventListener("click",listen);
+sendBtn.addEventListener("click",()=>sendMessage());
+input.addEventListener("keydown",e=>{
+ if(e.key==="Enter")sendMessage();
+});
+</script>
+</body>
+   </html>
+  
